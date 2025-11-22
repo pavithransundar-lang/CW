@@ -9,6 +9,7 @@ function App() {
   const [data, setData] = useState<WalletData>(INITIAL_WALLET_STATE);
   const [loading, setLoading] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [selectedClass, setSelectedClass] = useState<string>("");
   
   // Timer State
   const [timerMinutes, setTimerMinutes] = useState(0);
@@ -23,11 +24,37 @@ function App() {
 
   useEffect(() => {
     const unsubscribe = subscribeToWallet((walletData) => {
+      // Handle Daily Reset Check
+      const today = new Date().toISOString().split('T')[0];
+      if (walletData.lastActiveDate !== today) {
+        // Reset class earnings for the new day
+        const resetEarnings: Record<string, number> = {};
+        const classes = walletData.settings.classes || INITIAL_WALLET_STATE.settings.classes;
+        classes.forEach(c => resetEarnings[c] = 0);
+        
+        updateWalletData({
+          classEarnings: resetEarnings,
+          lastActiveDate: today
+        });
+        // We will receive the update in the next snapshot
+      }
+
+      // Ensure selectedClass is valid
+      const currentClasses = walletData.settings.classes || [];
+      if (currentClasses.length > 0 && (!selectedClass || !currentClasses.includes(selectedClass))) {
+        setSelectedClass(currentClasses[0]);
+      }
+
+      // Fix migration if classEarnings is number (legacy)
+      if (typeof walletData.classEarnings === 'number') {
+        walletData.classEarnings = INITIAL_WALLET_STATE.classEarnings;
+      }
+
       setData(walletData);
       setLoading(false);
     });
     return () => unsubscribe();
-  }, []);
+  }, [selectedClass]);
 
   // --- Actions ---
 
@@ -37,7 +64,8 @@ function App() {
       type,
       amount,
       description,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      className: selectedClass
     };
     
     // Calculate new state based on type
@@ -47,7 +75,12 @@ function App() {
 
     if (type === 'EARN') {
       updates.balance = data.balance + amount;
-      updates.classEarnings = data.classEarnings + amount;
+      
+      // Update specific class earnings
+      const currentClassEarnings = { ...data.classEarnings };
+      currentClassEarnings[selectedClass] = (currentClassEarnings[selectedClass] || 0) + amount;
+      updates.classEarnings = currentClassEarnings;
+
       updates.stats = {
         ...data.stats,
         totalLifetimeEarnings: data.stats.totalLifetimeEarnings + amount
@@ -86,15 +119,16 @@ function App() {
     } else if (type === 'WITHDRAW') {
       updates.savedBalance = data.savedBalance - amount;
       updates.balance = data.balance + amount;
-    } else if (type === 'RESET') {
-        // handled separately
     }
 
     updateWalletData(updates);
   };
 
   const handleStartClass = () => {
-    updateWalletData({ classEarnings: 0 });
+     // Reset only for current class
+     const currentClassEarnings = { ...data.classEarnings };
+     currentClassEarnings[selectedClass] = 0;
+     updateWalletData({ classEarnings: currentClassEarnings });
   };
 
   const handleShopPurchase = (cost: number, minutes: number) => {
@@ -127,17 +161,11 @@ function App() {
   };
 
   const handleImport = () => {
-    // Basic CSV parser: Type,Amount,Description
-    // Example: EARN,5,Homework
     const lines = importText.split('\n');
     let importedCount = 0;
-    
-    // We process sequentially (simplified for this demo)
-    // Real app might batch this
     lines.forEach(line => {
       const [type, amtStr, desc] = line.split(',');
       if (type && amtStr) {
-        // We only support importing earnings for safety in this demo context
         if (type.trim().toUpperCase() === 'EARN') {
              const amt = parseFloat(amtStr);
              if (!isNaN(amt)) {
@@ -154,9 +182,9 @@ function App() {
 
   const exportHistory = () => {
     const csvContent = "data:text/csv;charset=utf-8," 
-        + "Date,Type,Amount,Description\n"
+        + "Date,Class,Type,Amount,Description\n"
         + data.history.map(row => {
-            return `${new Date(row.timestamp).toLocaleDateString()},${row.type},${row.amount},"${row.description}"`
+            return `${new Date(row.timestamp).toLocaleDateString()},${row.className || 'General'},${row.type},${row.amount},"${row.description}"`
         }).join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -168,22 +196,24 @@ function App() {
 
   // --- Derived State ---
   const currency = data.settings.currencySymbol;
-  const earningsProgress = (data.classEarnings / data.settings.maxClassEarnings) * 100;
   
-  // Best ratio calculation for "Minutes Available"
+  // Use optional chaining or fallback for classEarnings in case of migration lag
+  const currentClassEarned = (data.classEarnings && data.classEarnings[selectedClass]) || 0;
+  const earningsProgress = (currentClassEarned / data.settings.maxClassEarnings) * 100;
+  
   const bestRatio = useMemo(() => {
     if (data.settings.shopItems.length === 0) return 0;
-    // Find max minutes per 1 currency unit
     return Math.max(...data.settings.shopItems.map(i => i.minutes / i.cost));
   }, [data.settings.shopItems]);
   
   const estimatedMinutes = Math.floor(data.balance * bestRatio);
 
+  const todayDate = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+
   if (loading) return <div className="h-screen w-full flex items-center justify-center bg-gray-50 text-emerald-600">Loading Wallet...</div>;
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans pb-20">
-      {/* --- Notification Banner --- */}
       {isMockMode && (
         <div className="bg-amber-100 text-amber-800 px-4 py-2 text-xs text-center font-medium">
           Demo Mode: Data is stored locally. Configure Firebase for cloud sync.
@@ -192,22 +222,48 @@ function App() {
 
       {/* --- Header --- */}
       <header className="bg-white shadow-sm sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
-          <div>
-            <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-              <CoinsIcon className="w-6 h-6 text-emerald-500" />
-              {data.settings.appTitle}
-            </h1>
-            <p className="text-sm text-gray-500">Welcome back, <span className="font-semibold text-gray-700">{data.settings.studentName}</span></p>
-          </div>
-          <button onClick={() => setIsSettingsOpen(true)} className="p-2 text-gray-400 hover:bg-gray-100 rounded-full transition">
-            <SettingsIcon className="w-6 h-6" />
-          </button>
+        <div className="max-w-4xl mx-auto px-4 py-4">
+            <div className="flex justify-between items-start">
+                <div>
+                    <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                    <CoinsIcon className="w-6 h-6 text-emerald-500" />
+                    {data.settings.appTitle}
+                    </h1>
+                    <div className="text-sm text-gray-500 mt-1">
+                        Student: <span className="font-semibold text-gray-700">{data.settings.studentName}</span>
+                        <span className="mx-2">•</span>
+                        Teacher: <span className="font-semibold text-gray-700">{data.settings.teacherName}</span>
+                    </div>
+                    <div className="text-xs text-gray-400 mt-1 font-medium uppercase tracking-wide">
+                        {todayDate}
+                    </div>
+                </div>
+                <button onClick={() => setIsSettingsOpen(true)} className="p-2 text-gray-400 hover:bg-gray-100 rounded-full transition">
+                    <SettingsIcon className="w-6 h-6" />
+                </button>
+            </div>
         </div>
       </header>
 
       <main className="max-w-4xl mx-auto px-4 py-6 space-y-6">
         
+        {/* --- Class Selector --- */}
+        <div className="flex overflow-x-auto pb-2 space-x-2 no-scrollbar">
+            {data.settings.classes.map(cls => (
+                <button
+                    key={cls}
+                    onClick={() => setSelectedClass(cls)}
+                    className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                        selectedClass === cls 
+                        ? 'bg-emerald-600 text-white shadow-md' 
+                        : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-50'
+                    }`}
+                >
+                    {cls}
+                </button>
+            ))}
+        </div>
+
         {/* --- Dashboard Grid --- */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           
@@ -237,7 +293,6 @@ function App() {
                 </div>
               </div>
               <div className="text-3xl font-bold text-gray-800 mb-1">{currency} {data.savedBalance.toFixed(2)}</div>
-              <p className="text-xs text-gray-400 italic">"A penny saved is a penny earned."</p>
             </div>
             
             <div className="mt-4 space-y-2">
@@ -267,17 +322,18 @@ function App() {
             </div>
           </div>
 
-          {/* 3. Class Progress (Earnings Limit) */}
+          {/* 3. Class Earnings (Selected Class) */}
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
              <div className="flex justify-between items-center mb-4">
                 <h3 className="text-gray-500 font-medium flex items-center gap-2">
-                  <TrendingUpIcon className="w-5 h-5 text-purple-500" /> Class Earnings
+                  <TrendingUpIcon className="w-5 h-5 text-purple-500" /> 
+                  <span className="truncate max-w-[100px]">{selectedClass}</span> Earnings
                 </h3>
-                <button onClick={handleStartClass} className="text-xs text-gray-400 hover:text-gray-600 underline">Reset Session</button>
+                <button onClick={handleStartClass} className="text-xs text-gray-400 hover:text-gray-600 underline">Reset Class</button>
              </div>
              
              <div className="text-center py-2">
-                <span className="text-2xl font-bold text-gray-800">{currency} {data.classEarnings.toFixed(2)}</span>
+                <span className="text-2xl font-bold text-gray-800">{currency} {currentClassEarned.toFixed(2)}</span>
                 <span className="text-gray-400 text-sm"> / {currency} {data.settings.maxClassEarnings.toFixed(2)}</span>
              </div>
 
@@ -288,7 +344,7 @@ function App() {
                 />
              </div>
              <p className="text-center text-xs text-gray-400 mt-2">
-               {earningsProgress >= 100 ? "Limit Reached" : "Keep working hard!"}
+               {earningsProgress >= 100 ? "Daily Limit Reached" : "Daily Progress"}
              </p>
           </div>
         </div>
@@ -336,10 +392,12 @@ function App() {
 
              {/* Teacher Tools / Earnings */}
              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                <h2 className="text-lg font-bold text-gray-800 mb-4">Quick Add Funds</h2>
+                <h2 className="text-lg font-bold text-gray-800 mb-4">
+                    Add Funds <span className="text-gray-400 font-normal text-sm ml-2">to {selectedClass}</span>
+                </h2>
                 <div className="flex flex-wrap gap-3">
                    {[0.50, 1.00, 2.00, 5.00].map(amt => {
-                      const isOverLimit = (data.classEarnings + amt) > data.settings.maxClassEarnings;
+                      const isOverLimit = (currentClassEarned + amt) > data.settings.maxClassEarnings;
                       return (
                         <button
                           key={amt}
@@ -398,7 +456,12 @@ function App() {
                         ) : (
                            data.history.map(tx => (
                               <tr key={tx.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50">
-                                 <td className="px-4 py-3 text-gray-500">{new Date(tx.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
+                                 <td className="px-4 py-3 text-gray-500">
+                                    <div className="flex flex-col">
+                                        <span>{new Date(tx.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                        {tx.className && <span className="text-[10px] text-purple-500 font-semibold">{tx.className}</span>}
+                                    </div>
+                                 </td>
                                  <td className="px-4 py-3 font-medium text-gray-700">
                                    <span className={`inline-block w-2 h-2 rounded-full mr-2 
                                      ${tx.type === 'EARN' ? 'bg-emerald-400' : 

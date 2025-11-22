@@ -11,7 +11,7 @@ interface Props {
 
 export const SettingsModal: React.FC<Props> = ({ isOpen, onClose, settings, onSave, onReset }) => {
   const [formData, setFormData] = useState<Settings>(settings);
-  const [activeTab, setActiveTab] = useState<'general' | 'shop' | 'goals'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'shop' | 'goals' | 'classes'>('general');
 
   if (!isOpen) return null;
 
@@ -24,6 +24,12 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose, settings, onSa
     const newGoals = [...formData.goals];
     newGoals[idx] = val;
     setFormData({ ...formData, goals: newGoals });
+  };
+
+  const handleClassChange = (idx: number, val: string) => {
+    const newClasses = [...formData.classes];
+    newClasses[idx] = val;
+    setFormData({ ...formData, classes: newClasses });
   };
 
   const handleAddShopItem = () => {
@@ -52,10 +58,11 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose, settings, onSa
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
         </div>
 
-        <div className="flex border-b border-gray-100">
-          <button onClick={() => setActiveTab('general')} className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'general' ? 'text-emerald-600 border-b-2 border-emerald-500 bg-emerald-50/30' : 'text-gray-500 hover:text-gray-700'}`}>General</button>
-          <button onClick={() => setActiveTab('shop')} className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'shop' ? 'text-emerald-600 border-b-2 border-emerald-500 bg-emerald-50/30' : 'text-gray-500 hover:text-gray-700'}`}>Shop Prices</button>
-          <button onClick={() => setActiveTab('goals')} className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'goals' ? 'text-emerald-600 border-b-2 border-emerald-500 bg-emerald-50/30' : 'text-gray-500 hover:text-gray-700'}`}>Class Goals</button>
+        <div className="flex border-b border-gray-100 overflow-x-auto">
+          <button onClick={() => setActiveTab('general')} className={`flex-1 min-w-[80px] py-3 text-sm font-medium transition-colors ${activeTab === 'general' ? 'text-emerald-600 border-b-2 border-emerald-500 bg-emerald-50/30' : 'text-gray-500 hover:text-gray-700'}`}>General</button>
+          <button onClick={() => setActiveTab('classes')} className={`flex-1 min-w-[80px] py-3 text-sm font-medium transition-colors ${activeTab === 'classes' ? 'text-emerald-600 border-b-2 border-emerald-500 bg-emerald-50/30' : 'text-gray-500 hover:text-gray-700'}`}>Classes</button>
+          <button onClick={() => setActiveTab('shop')} className={`flex-1 min-w-[80px] py-3 text-sm font-medium transition-colors ${activeTab === 'shop' ? 'text-emerald-600 border-b-2 border-emerald-500 bg-emerald-50/30' : 'text-gray-500 hover:text-gray-700'}`}>Shop Prices</button>
+          <button onClick={() => setActiveTab('goals')} className={`flex-1 min-w-[80px] py-3 text-sm font-medium transition-colors ${activeTab === 'goals' ? 'text-emerald-600 border-b-2 border-emerald-500 bg-emerald-50/30' : 'text-gray-500 hover:text-gray-700'}`}>Class Goals</button>
         </div>
 
         <div className="p-6 overflow-y-auto flex-1">
@@ -70,14 +77,25 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose, settings, onSa
                   className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 border p-2.5 text-sm"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Student Name</label>
-                <input 
-                  type="text" 
-                  value={formData.studentName}
-                  onChange={e => setFormData({...formData, studentName: e.target.value})}
-                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 border p-2.5 text-sm"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Student Name</label>
+                    <input 
+                    type="text" 
+                    value={formData.studentName}
+                    onChange={e => setFormData({...formData, studentName: e.target.value})}
+                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 border p-2.5 text-sm"
+                    />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Teacher Name</label>
+                    <input 
+                    type="text" 
+                    value={formData.teacherName}
+                    onChange={e => setFormData({...formData, teacherName: e.target.value})}
+                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 border p-2.5 text-sm"
+                    />
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -99,6 +117,36 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose, settings, onSa
                   />
                 </div>
               </div>
+            </div>
+          )}
+
+          {activeTab === 'classes' && (
+            <div className="space-y-3">
+              <p className="text-sm text-gray-500 mb-2">Define your class periods here.</p>
+              {formData.classes.map((cls, idx) => (
+                <div key={idx} className="flex gap-2 items-center">
+                   <div className="bg-purple-100 text-purple-600 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0">
+                     {idx + 1}
+                   </div>
+                   <input 
+                    type="text" 
+                    value={cls}
+                    onChange={(e) => handleClassChange(idx, e.target.value)}
+                    className="flex-1 border-gray-300 rounded-lg border p-2 text-sm focus:ring-purple-500 focus:border-purple-500" 
+                  />
+                  <button onClick={() => {
+                     const newClasses = formData.classes.filter((_, i) => i !== idx);
+                     setFormData({...formData, classes: newClasses});
+                  }} className="text-gray-400 hover:text-red-500 p-2 hover:bg-red-50 rounded-lg transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+              <button onClick={() => setFormData({...formData, classes: [...formData.classes, `Period ${formData.classes.length + 1}`]})} className="text-sm text-purple-600 font-semibold hover:text-purple-700 flex items-center gap-1 mt-2">
+                <span>+</span> Add Class
+              </button>
             </div>
           )}
 

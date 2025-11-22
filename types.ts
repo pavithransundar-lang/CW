@@ -6,6 +6,7 @@ export interface Transaction {
   amount: number;
   description: string;
   timestamp: number;
+  className?: string;
 }
 
 export interface ShopItem {
@@ -33,17 +34,20 @@ export interface GameStats {
 
 export interface Settings {
   appTitle: string;
+  teacherName: string;
   studentName: string;
   currencySymbol: string;
   maxClassEarnings: number; // Max earnings per session
   shopItems: ShopItem[];
   goals: string[];
+  classes: string[];
 }
 
 export interface WalletData {
   balance: number;
   savedBalance: number;
-  classEarnings: number; // Earnings in current session
+  classEarnings: Record<string, number>; // Earnings in current session per class
+  lastActiveDate: string; // To track daily resets
   history: Transaction[];
   stats: GameStats;
   settings: Settings;
@@ -51,6 +55,7 @@ export interface WalletData {
 
 export const DEFAULT_SETTINGS: Settings = {
   appTitle: "Classroom Wallet",
+  teacherName: "Teacher",
   studentName: "Student",
   currencySymbol: "RM",
   maxClassEarnings: 5.00,
@@ -63,13 +68,20 @@ export const DEFAULT_SETTINGS: Settings = {
     "Complete homework on time",
     "Help a classmate",
     "Keep desk tidy"
-  ]
+  ],
+  classes: ["Period 1", "Period 2", "Period 3", "Period 4"]
 };
 
 export const INITIAL_WALLET_STATE: WalletData = {
   balance: 0,
   savedBalance: 0,
-  classEarnings: 0,
+  classEarnings: {
+    "Period 1": 0,
+    "Period 2": 0,
+    "Period 3": 0,
+    "Period 4": 0
+  },
+  lastActiveDate: new Date().toISOString().split('T')[0],
   history: [],
   stats: {
     totalLifetimeEarnings: 0,

@@ -72,7 +72,18 @@ export const subscribeToWallet = (callback: (data: WalletData) => void) => {
   // Real Firestore
   const unsubscribe = onSnapshot(doc(db, COLLECTION, DOC_ID), (docSnap) => {
     if (docSnap.exists()) {
-      callback(docSnap.data() as WalletData);
+      const data = docSnap.data() as WalletData;
+      // Migration check for old data structure
+      if (typeof data.classEarnings === 'number') {
+         data.classEarnings = INITIAL_WALLET_STATE.classEarnings;
+      }
+      if (!data.settings.classes) {
+        data.settings.classes = INITIAL_WALLET_STATE.settings.classes;
+      }
+      if (!data.settings.teacherName) {
+        data.settings.teacherName = INITIAL_WALLET_STATE.settings.teacherName;
+      }
+      callback(data);
     } else {
       // Create if doesn't exist
       setDoc(doc(db, COLLECTION, DOC_ID), INITIAL_WALLET_STATE)
